@@ -1,0 +1,59 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+imports:
+  - https://cloudify.co/spec/cloudify/6.3.1/types.yaml
+  - plugin:cloudify-fabric-plugin
+
+inputs:
+  region_name:
+      type: string
+      display_label: AWS Region Name
+      description: Select AWS region name
+      default: ca-central-1
+
+
+node_templates:
+  network:
+    type: cloudify.nodes.ServiceComponent
+    properties:
+      resource_config:
+        blueprint:
+          external_resource: false
+          id: network
+          blueprint_archive: vm/vm.zip
+          main_file_name: network_blueprint.yaml
+        deployment:
+          id: network
+          auto_inc_suffix: false
+          inputs:
+            region_name: { get_input: region_name }
+
+  vm:
+    type: cloudify.nodes.ServiceComponent
+    properties:
+      resource_config:
+        blueprint:
+          external_resource: false
+          id: vm
+          blueprint_archive: vm/vm.zip
+          main_file_name: vm_blueprint.yaml
+        deployment:
+          id: vm
+          auto_inc_suffix: false
+          inputs:
+            instance_type: t2.medium
+            region_name: { get_input: region_name }
+            ssh_key_secret_name: vm_ssh_key
+            subnet_id:
+              get_capability:
+                - { get_attribute: [network, deployment, id] }
+                - subnet_id
+            security_group_id:
+              get_capability:
+                - { get_attribute: [network, deployment, id] }
+                - security_group_id
+            ec2_name: vm_remote_ansible
+    relationships:
+      - type: cloudify.relationships.depends_on
+        target: network
+
